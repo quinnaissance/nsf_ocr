@@ -2,13 +2,13 @@
 * Firefox
 * BeautifulSoup
 * selenium (with [geckodriver.exe](https://github.com/mozilla/geckodriver/releases) in PATH)
-* OpenCV (using 4.5.1) with GUI
+* opencv-python (using 4.5.1) __with GUI__
 * youtube-dl
 * ffmpeg
 * pytesseract — must be with 14MB [eng.traineddata](https://github.com/tesseract-ocr/tessdata_best/blob/master/eng.traineddata) (replace the 4MB one)
 
 # TODO List
-* Account for missing checklist
+* Account for missing checklist more dynamically
   * Add log to keep track of previous detections and calculate time since
 * Use line detection instead of contours to detect the box is on screen
 * Verify initial crop and min/max area values based on real data
@@ -18,3 +18,8 @@
 * Split checklist using ```cv2.reduce``` to read every line separately
   * Can get sequence number
 * Figure out some way to share the info openly
+* Add a flag to delete captured images after
+* Add timeouts, exceptions & cleaner prints
+
+## Known Issues
+* Sometimes ```get_stream_screenshot``` takes excessively long; this is an ffmpeg issue that I haven't figured out yet
