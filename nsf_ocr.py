@@ -5,7 +5,6 @@ import cv2
 import pytesseract as tess
 import stream_tools as yt
 
-
 # Stream links
 NSF_CHANNEL = R'https://www.youtube.com/channel/UCSUu1lih2RifWkKtDOJdsBA'
 NSF_STREAMS = R'https://www.youtube.com/c/NASASpaceflightVideos/videos?view=2&live_view=501'
@@ -16,24 +15,48 @@ CROP_Y = 68 # 68 to skip top banner
 CROP_W = 250
 CROP_H = 800
 
-# Area range to filter white current status box
+# Area range to filter current status box
 MIN_AREA = 4000
 MAX_AREA = 10000
 
 # OpenCV image for test purposes
-PRESET_IMAGE = "samples/nsf3.jpg"
+PRESET_IMG = "samples/nsf1.jpg"
 
+# Output image GUI window name
+WINDOW_NAME = 'window'
+
+# Delete images grabbed from stream after OCRing
+DELETE_OUTPUT_IMG = True
+
+# Output filenames
+OUTPUT_IMG = "" # Fetched stream screenshot
+OUTPUT_MSG = "" # Final OCR output
+
+# Clear console
 def cls():
     os.system('cls')
 
-def res_check(img,width,height): # Verify image resolution
-    return img.shape[1] == width and img.shape[0] == height
+# If the delete flag is enabled, get rid of the generated image
+def image_cleanup(filename):
+    if DELETE_OUTPUT_IMG and filename != "":
+        if os.path.exists(filename):
+            os.remove(filename)
+            print(f"Output image {filename} deleted")
+        else:
+            print(f"Cannot locate {filename} for deletion")
+
+# Verify image resolution
+def res_check(img,width,height):
+    if "numpy.ndarray" in str(type(img)):
+        return img.shape[1] == width and img.shape[0] == height
+    else:
+        return False
 
 # Receive target contour ndarray and img
 # Input should look roughly like: [ [[x y]] [[x y]] [[x y]] [[x y]] ]
 def crop_img_from_contours(array, img):
     if len(array) != 4: # Verify input is a 4-sided shape
-        print("Invalid number of contour points (looking for 4)")
+        print("Invalid number of contour points for crop_img_from_contours (need 4)")
         return img
     # Could add verification that coordinates line up
     else:
@@ -49,7 +72,7 @@ def crop_img_from_contours(array, img):
 
 
 def main():
-
+    
     # Does the channel have any streams?
     if not yt.channel_is_streaming(NSF_CHANNEL):
         print("No streams detected on channel")
@@ -62,7 +85,7 @@ def main():
     for stream in stream_list:
         # Look for SN## in stream title -> get first match
         if re.search("SN[0-9]{1,2}",stream[0]) != None:
-            print("MATCHING STREAM FOUND")
+            print("Matching stream found")
             target_stream.append(stream)
             break
     
@@ -79,12 +102,16 @@ def main():
     if stream_img_file == "":
         print("Unable to fetch image from livestream")
         sys.exit()
-
-    # Load image
-    img = cv2.imread(stream_img_file)
+    else:
+        OUTPUT_IMG = stream_img_file
+        print("Output image " + OUTPUT_IMG + " created")
+    
+    # Load image into memory then delete the file (if desired)
+    img = cv2.imread(OUTPUT_IMG) #! PRESET_IMG or OUTPUT_IMG
+    image_cleanup(OUTPUT_IMG)
 
     # Image resolution check
-    if res_check(img,1920,1080) == False:
+    if res_check(img,1920,1080) != True:
         print("Image resolution is not 1920x1080")
         sys.exit()
 
@@ -102,49 +129,69 @@ def main():
     target_set = [] # save ndarray of contour vertices matching certain criteria
     for i in contours:
         area = cv2.contourArea(i)
-        if area > MIN_AREA and area < MAX_AREA and len(i) == 4: # Pass the area requirements
-            target_set = i
-            #print("Current status area: " + str(area) + " | Vertices: " + str(len(i)))
-            #cv2.drawContours(crop_img, [i], -1, (25,25,255), 2) # Visualize
-            break # Force maximum of 1 match
+        length = len(i)
+
+        # Area requirements
+        if area > MIN_AREA and area < MAX_AREA: 
+            #cv2.drawContours(crop_img, [i], -1, (25,25,255), 1)
+
+            # Verify quadrilateral
+            if length == 4:
+                target_set = i
+                #print("Current status area: " + str(area) + " | Vertices: " + str(len(i)))
+                break # Force maximum of 1 match
+            
+            # Too many vertices; filter out redundant ones
+            if length > 4 and length < 14:
+                epsilon_max = 0.001
+                fixed = cv2.approxPolyDP(i, epsilon_max*cv2.arcLength(i,True), closed=True)
+                # Keep incrementing epsilon until polygon is 4 points or it clearly isnt a square
+                while len(fixed) > 4 or epsilon_max > 0.1:
+                    epsilon_max += 0.001
+                    fixed = cv2.approxPolyDP(i, epsilon_max*cv2.arcLength(i,True), closed=True)
+                #cv2.drawContours(crop_img, [fixed], -1, (0,255,0), 1)
+                if epsilon_max >= 0.1:
+                    print("Detected shape is too distorted")
+                    break
+                else:
+                    target_set = fixed
+                    break
 
     # No matching item found
     if len(target_set) == 0:
         print("No matching current status box found")
         sys.exit()
-
+    
     # Final crop
-    final_crop_img = crop_img_from_contours(target_set, crop_img)
+    if len(target_set) == 4:
+        final_crop_img = crop_img_from_contours(target_set, crop_img)
 
-    #Show images # ! (requires OpenCV GUI)
-    window_name = 'output_img'
-    #cv2.imshow(window_name, img)
+    #Show images #! (requires OpenCV GUI)
+    #cv2.imshow(WINDOW_NAME, img)
     #cv2.waitKey(0)
-    #cv2.imshow(window_name, crop_img)
+    #cv2.imshow(WINDOW_NAME, crop_img)
     #cv2.waitKey(0)
-    #cv2.imshow(window_name, gray)
+    #cv2.imshow(WINDOW_NAME, gray)
     #cv2.waitKey(0)
-    #cv2.imshow(window_name, thresh)
+    #cv2.imshow(WINDOW_NAME, thresh)
     #cv2.waitKey(0)
-    #cv2.imshow(window_name, thresh2)
-    #cv2.waitKey(0)
-    #cv2.imshow(window_name, thresh2_invert)
-    #cv2.waitKey(0)
-    #cv2.imshow(window_name, final_crop_img)
+    #cv2.imshow(WINDOW_NAME, final_crop_img)
     #cv2.waitKey(0)
     cv2.destroyAllWindows()
     
     # OCR
-    # ! Seems to work better with black text on white bg
+    #! Seems to work better with black text on white bg
     ocr_text = tess.image_to_string(final_crop_img, config='--psm 7')
     ocr_clean = re.findall("[A-Z].*", ocr_text)
+    #dict = re.findall("\w+",ocr_text)
+
+    # Simple check that the OCR has *something* in it
     if re.search("\w+",ocr_clean[0]) != None:
-        print(ocr_clean[0])
+        OUTPUT_MSG = ocr_clean[0]
+        print("Status: " + OUTPUT_MSG)
     else:
         print("Unable to OCR final crop")
         sys.exit()
-
-
 
 if __name__ == "__main__":
     main()

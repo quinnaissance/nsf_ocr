@@ -54,7 +54,7 @@ def get_livestream_url(url):
 def get_stream_screenshot(url):
     current_time = int(time.time())
     stream_img_outname = f"{current_time}.jpg" # Filename of output image
-    stream = os.popen(f'\"{FFMPEG_PATH}\" -hide_banner -i "{url}" -f image2 -frames:v 1 "{stream_img_outname}"') # -loglevel error 
+    stream = os.popen(f'\"{FFMPEG_PATH}\" -hide_banner -loglevel error -i "{url}" -f image2 -frames:v 1 "{stream_img_outname}"') # -loglevel error 
     stream.read() # Forces a wait for os.popen command to finish before moving on
     if os.path.isfile(stream_img_outname): # Verify screenshot was taken
         return stream_img_outname
